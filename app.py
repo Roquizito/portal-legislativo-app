@@ -7,7 +7,7 @@ st.set_page_config(page_title="Portal de Gestão Legislativa", page_icon="🏛�
 supabase = db.get_connection()
 
 # Construção do Header com UI limpa
-st.title("🏛️ Portal de Gestão Legislativa")
+st.title("🏛️ Portal de Gestão Legislativa da Câmara Municipal (Mossoró/RN)")
 st.markdown("---")
 
 # Abas de navegação
