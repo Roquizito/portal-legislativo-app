@@ -1,117 +1,118 @@
 # app.py
 import streamlit as st
-from supabase import create_client, Client
+import database as db
 
-# Configuração da Página
-st.set_page_config(page_title="Sistema de Inserção Legislativa", layout="wide")
-st.title("🏛️ Portal de Gestão Legislativa da Câmara Municipal (Mossoró/RN)")
-st.markdown("Interface transacional para inserção no banco de dados estruturado.")
+# Configuração global de UI
+st.set_page_config(page_title="Portal de Gestão Legislativa", page_icon="🏛️", layout="wide")
+supabase = db.get_connection()
 
+# Construção do Header com UI limpa
+st.title("🏛️ Portal de Gestão Legislativa")
+st.markdown("---")
 
-# Inicialização da conexão com o Supabase
-@st.cache_resource
-def init_connection():
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    return create_client(url, key)
-
-
-supabase: Client = init_connection()
-
-# Criação de abas para organizar a interface
+# Abas de navegação
 tab_projetos, tab_autores, tab_tramitacao = st.tabs([
-    "Cadastrar Projeto (Dimensão)",
-    "Cadastrar Autor (Dimensão)",
-    "Registrar Tramitação (Fato)"
+    "📄 Cadastrar Projeto",
+    "👤 Cadastrar Autor",
+    "🔄 Registrar Tramitação"
 ])
 
 # ---------------------------------------------------------
-# ABA 1: DIM_PROJETOS
+# ABA 1: PROJETOS (Dimensão)
 # ---------------------------------------------------------
 with tab_projetos:
-    st.header("Novo Projeto de Lei")
+    st.subheader("Novo Projeto de Lei")
     with st.form("form_projetos", clear_on_submit=True):
         col1, col2 = st.columns(2)
-        numero_ano = col1.text_input("Número/Ano do Projeto", placeholder="Ex: 123/2026")
+        numero_ano = col1.text_input("Número/Ano do Projeto*", placeholder="Ex: 123/2026")
         tipo_projeto = col2.selectbox("Tipo de Projeto",
                                       ["Projeto de Lei Ordinária", "Projeto de Emenda", "Resolução", "Decreto"])
 
-        protocolo = st.text_input("Protocolo")
-        status_atual = st.selectbox("Status Atual", ["Em Tramitação", "Aprovado", "Rejeitado", "Arquivado"])
+        protocolo = col1.text_input("Protocolo*")
+        status_atual = col2.selectbox("Status Atual", ["Em Tramitação", "Aprovado", "Rejeitado", "Arquivado"])
 
-        submit_projeto = st.form_submit_button("Gravar Projeto")
-
-        if submit_projeto:
-            if numero_ano and protocolo:
-                try:
-                    data = {
-                        "numero_ano_projeto": numero_ano,
-                        "tipo_projeto": tipo_projeto,
-                        "protocolo": protocolo,
-                        "status_atual_projeto": status_atual
-                    }
-                    # O Supabase gerará a SK_projeto (Identity/Auto-increment) automaticamente
-                    response = supabase.table("dim_projetos").insert(data).execute()
-                    st.success("✅ Projeto gravado com sucesso! Clique em 'Atualizar' no Power BI para refletir.")
-                except Exception as e:
-                    st.error(f"Erro ao inserir no banco: {e}")
-            else:
-                st.warning("Preencha os campos obrigatórios (Número/Ano e Protocolo).")
+        if st.form_submit_button("Gravar Projeto no Data Warehouse", use_container_width=True):
+            try:
+                payload = {
+                    "numero_ano_projeto": numero_ano,
+                    "tipo_projeto": tipo_projeto,
+                    "protocolo": protocolo,
+                    "status_atual_projeto": status_atual
+                }
+                db.insert_projeto(supabase, payload)
+                st.toast("Projeto gravado com sucesso!", icon="✅")
+            except Exception as e:
+                st.error(f"Erro de Validação: {str(e)}")
 
 # ---------------------------------------------------------
-# ABA 2: DIM_AUTORES
+# ABA 2: AUTORES (Dimensão)
 # ---------------------------------------------------------
 with tab_autores:
-    st.header("Novo Autor/Parlamentar")
+    st.subheader("Novo Autor/Parlamentar")
     with st.form("form_autores", clear_on_submit=True):
-        nome_autor = st.text_input("Nome Completo do Autor")
-        nome_parlamentar = st.text_input("Nome Parlamentar (Como é conhecido)")
+        col1, col2 = st.columns(2)
+        nome_autor = col1.text_input("Nome Completo do Autor*")
+        nome_parlamentar = col2.text_input("Nome Parlamentar", help="Como é conhecido publicamente")
         tipo_autor = st.selectbox("Tipo de Autor", ["Vereador", "Comissão", "Mesa Diretora", "Prefeitura"])
 
-        submit_autor = st.form_submit_button("Gravar Autor")
-
-        if submit_autor:
+        if st.form_submit_button("Gravar Autor", use_container_width=True):
             try:
-                data = {
+                payload = {
                     "nome_autor": nome_autor,
                     "nome_parlamentar": nome_parlamentar,
                     "tipo_autor": tipo_autor
                 }
-                supabase.table("dim_autores").insert(data).execute()
-                st.success("✅ Autor registrado com sucesso no Data Warehouse.")
+                db.insert_autor(supabase, payload)
+                st.toast("Autor cadastrado e indexado!", icon="✅")
             except Exception as e:
-                st.error(f"Erro de integração: {e}")
+                st.error(f"Erro de Validação: {str(e)}")
 
 # ---------------------------------------------------------
-# ABA 3: FATO_TRAMITACOES
+# ABA 3: TRAMITAÇÕES (Fato)
 # ---------------------------------------------------------
 with tab_tramitacao:
-    st.header("Registrar Tramitação")
-    st.markdown("Alimenta a tabela `fato_tramitacoes` para análise de gargalos nos setores.")
-    with st.form("form_tramitacoes", clear_on_submit=True):
-        col1, col2 = st.columns(2)
+    st.subheader("Registrar Movimentação de Setor")
 
-        # Em um cenário real, esses dados viriam de um 'select' no banco para preencher o combobox
-        sk_projeto = col1.number_input("ID do Projeto (SK_projeto)", min_value=1, step=1)
-        sk_setor_origem = col2.number_input("ID Setor Origem (SK_setor)", min_value=1, step=1)
-        sk_setor_destino = col1.number_input("ID Setor Destino (SK_setor)", min_value=1, step=1)
+    # Carregamento dinâmico dos dados para os Dropdowns (UI/UX)
+    projetos_disponiveis = db.fetch_projetos(supabase)
+    setores_disponiveis = db.fetch_setores(supabase)
 
-        data_envio = col2.date_input("Data de Envio")
+    if not projetos_disponiveis or not setores_disponiveis:
+        st.warning("É necessário cadastrar Projetos e Setores antes de registrar tramitações.")
+    else:
+        with st.form("form_tramitacoes", clear_on_submit=True):
+            # Selectbox Dinâmico: Mostra o nome legível, mas o código captura o ID (SK)
+            projeto_selecionado = st.selectbox(
+                "Selecione o Projeto de Lei*",
+                options=projetos_disponiveis,
+                format_func=lambda x: f"Projeto {x['numero_ano_projeto']}"
+            )
 
-        submit_tramitacao = st.form_submit_button("Registrar Movimentação")
+            col1, col2 = st.columns(2)
+            setor_origem = col1.selectbox(
+                "Setor de Origem*",
+                options=setores_disponiveis,
+                format_func=lambda x: x['nome_setor']
+            )
+            setor_destino = col2.selectbox(
+                "Setor de Destino*",
+                options=setores_disponiveis,
+                format_func=lambda x: x['nome_setor'],
+                index=1 if len(setores_disponiveis) > 1 else 0
+            )
 
-        if submit_tramitacao:
-            try:
-                # O cálculo de tempo_em_dias será feito pelo processo de ETL ou View,
-                # aqui a interface registra apenas o evento transacional.
-                data = {
-                    "SK_projeto": sk_projeto,
-                    "SK_setor_origem": sk_setor_origem,
-                    "SK_setor_destino": sk_setor_destino,
-                    "data_envio": data_envio.isoformat(),
-                    "quantidade_tramitacoes": 1
-                }
-                supabase.table("fato_tramitacoes").insert(data).execute()
-                st.success("✅ Tramitação registrada. Gargalos já podem ser mensurados no Dashboard.")
-            except Exception as e:
-                st.error(f"Falha na gravação: Verifique as chaves estrangeiras (FK). Erro: {e}")
+            data_envio = st.date_input("Data de Envio do Malote/Documento")
+
+            if st.form_submit_button("Registrar Movimentação na Tabela Fato", type="primary", use_container_width=True):
+                try:
+                    payload = {
+                        "SK_projeto": projeto_selecionado["SK_projeto"],
+                        "SK_setor_origem": setor_origem["SK_setor"],
+                        "SK_setor_destino": setor_destino["SK_setor"],
+                        "data_envio": data_envio.isoformat(),
+                        "quantidade_tramitacoes": 1
+                    }
+                    db.insert_tramitacao(supabase, payload)
+                    st.toast(f"Tramitação do projeto {projeto_selecionado['numero_ano_projeto']} registrada!", icon="🔄")
+                except Exception as e:
+                    st.error(f"Bloqueio de Regra de Negócio: {str(e)}")

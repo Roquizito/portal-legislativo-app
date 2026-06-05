@@ -12,13 +12,13 @@ def get_connection() -> Client:
 @st.cache_data(ttl=60)
 def fetch_projetos(_supabase: Client) -> list:
     """Busca os projetos em cache por 60 segundos para otimizar a performance."""
-    response = _supabase.table("dim_projetos").select("SK_projeto, numero_ano_projeto").execute()
+    response = _supabase.table("dim_projetos").select("SK_projeto,numero_ano_projeto").execute()
     return response.data
 
 @st.cache_data(ttl=3600)
 def fetch_setores(_supabase: Client) -> list:
     """Busca os setores disponíveis. Cache longo pois setores mudam raramente."""
-    response = _supabase.table("dim_setores").select("SK_setor, nome_setor").execute()
+    response = _supabase.table("dim_setores").select("SK_setor,nome_setor").execute()
     return response.data
 
 def insert_projeto(supabase: Client, data: dict) -> None:
