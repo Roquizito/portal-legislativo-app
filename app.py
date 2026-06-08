@@ -21,7 +21,7 @@ with tab_projetos:
     st.subheader("Novo Projeto de Lei")
     with st.form("form_projetos", clear_on_submit=True):
         col1, col2 = st.columns(2)
-        numero_ano = col1.text_input("Número/Ano do Projeto*", placeholder="Ex: 123/2026")
+        numero_ano = col1.text_input("Número/Ano do Projeto/Lei*", placeholder="Ex: 123/2026")
         tipo_projeto = col2.selectbox("Tipo de Projeto",
                                       ["Projeto de Lei Ordinária", "Projeto de Emenda", "Resolução", "Decreto"])
 
@@ -69,13 +69,13 @@ with tab_autores:
 # ABA 3: TRAMITAÇÕES (Tabela: tramitacao)
 # ---------------------------------------------------------
 with tab_tramitacao:
-    st.subheader("Registrar Movimentação de Setor")
+    st.subheader("Registar Movimentação de Setor")
 
+    # Agora procuramos apenas os projetos
     projetos_disponiveis = db.fetch_projetos(supabase)
-    setores_disponiveis = db.fetch_setores(supabase)
 
-    if not projetos_disponiveis or not setores_disponiveis:
-        st.warning("É necessário cadastrar Projetos e Setores antes de registrar tramitações.")
+    if not projetos_disponiveis:
+        st.warning("É necessário cadastrar pelo menos um Projeto de Lei antes de registar tramitações.")
     else:
         with st.form("form_tramitacoes", clear_on_submit=True):
 
@@ -86,35 +86,28 @@ with tab_tramitacao:
             )
 
             col1, col2 = st.columns(2)
-            setor_origem = col1.selectbox(
-                "Setor de Origem*",
-                options=setores_disponiveis,
-                format_func=lambda x: x.get('nome_setor', x.get('nome', 'Setor Desconhecido'))
-            )
-            setor_destino = col2.selectbox(
-                "Setor de Destino*",
-                options=setores_disponiveis,
-                format_func=lambda x: x.get('nome_setor', x.get('nome', 'Setor Desconhecido')),
-                index=1 if len(setores_disponiveis) > 1 else 0
-            )
+            # Substituição dos dropdowns relacionais por campos de texto livre
+            origem_texto = col1.text_input("Setor de Origem*", placeholder="Ex: Gabinete 01")
+            destino_texto = col2.text_input("Setor de Destino*", placeholder="Ex: Plenário")
 
             data_envio = st.date_input("Data de Envio")
 
-            if st.form_submit_button("Registrar Movimentação", type="primary", use_container_width=True):
-                try:
-                    # Tenta capturar a chave primária 'SK_projeto', se não existir, tenta 'id'
-                    id_projeto = projeto_selecionado.get("SK_projeto", projeto_selecionado.get("id"))
-                    id_setor_origem = setor_origem.get("SK_setor", setor_origem.get("id"))
-                    id_setor_destino = setor_destino.get("SK_setor", setor_destino.get("id"))
+            if st.form_submit_button("Registar Movimentação", type="primary", use_container_width=True):
+                # Validação simples para garantir que os campos não são enviados em branco
+                if not origem_texto or not destino_texto:
+                    st.error("Por favor, preencha a origem e o destino da tramitação.")
+                else:
+                    try:
+                        id_projeto = projeto_selecionado.get("SK_projeto", projeto_selecionado.get("id"))
 
-                    payload = {
-                        "SK_projeto": id_projeto,
-                        "SK_setor_origem": id_setor_origem,
-                        "SK_setor_destino": id_setor_destino,
-                        "data_envio": data_envio.isoformat(),
-                        "quantidade_tramitacoes": 1
-                    }
-                    db.insert_tramitacao(supabase, payload)
-                    st.toast("Tramitação registrada com sucesso!", icon="🔄")
-                except Exception as e:
-                    st.error(f"Erro de Integração (Verifique as colunas das tabelas): {str(e)}")
+                        payload = {
+                            "SK_projeto": id_projeto,
+                            "origem": origem_texto,  # 👈 Envia o texto escrito pelo utilizador
+                            "destino": destino_texto,  # 👈 Envia o texto escrito pelo utilizador
+                            "data_envio": data_envio.isoformat(),
+                            "quantidade_tramitacoes": 1
+                        }
+                        db.insert_tramitacao(supabase, payload)
+                        st.toast("Tramitação registada com sucesso!", icon="🔄")
+                    except Exception as e:
+                        st.error(f"Erro de Integração: {str(e)}")

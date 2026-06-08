@@ -15,12 +15,6 @@ def fetch_projetos(_supabase: Client) -> list:
     response = _supabase.table("projeto_lei").select("*").execute()
     return response.data
 
-@st.cache_data(ttl=3600)
-def fetch_setores(_supabase: Client) -> list:
-    """Busca os setores na tabela física 'setor'."""
-    response = _supabase.table("setor").select("*").execute()
-    return response.data
-
 def insert_projeto(supabase: Client, data: dict) -> None:
     """Insere um novo projeto na tabela 'projeto_lei'."""
     supabase.table("projeto_lei").insert(data).execute()
