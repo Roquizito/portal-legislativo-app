@@ -2,112 +2,125 @@
 import streamlit as st
 import database as db
 
-st.set_page_config(page_title="Portal de Gestão Legislativa da Câmara Municipal (Mossoró/RN)", page_icon="🏛️", layout="wide")
+st.set_page_config(page_title="Portal de Gestão Legislativa", page_icon="🏛️", layout="wide")
 supabase = db.get_connection()
 
-st.title("🏛️ Portal de Gestão Legislativa da Câmara Municipal (Mossoró/RN)")
+st.title("🏛️ Portal de Gestão Legislativa")
 st.markdown("---")
 
-tab_projetos, tab_autores, tab_tramitacao = st.tabs([
-    "📄 Cadastrar Projeto",
-    "👤 Cadastrar Autor",
-    "🔄 Registrar Tramitação"
+tab_cadastro, tab_tramitacao, tab_parecer = st.tabs([
+    "📄 Cadastrar Projeto (Base)",
+    "🔄 Atualizar Tramitação",
+    "📑 Registar Parecer (Evento)"
 ])
 
 # ---------------------------------------------------------
-# ABA 1: PROJETOS (Tabela: projeto_lei)
+# ABA 1: PROJETO E AUTOR (Inserção na Super Tabela)
 # ---------------------------------------------------------
-with tab_projetos:
-    st.subheader("Novo Projeto de Lei")
-    with st.form("form_projetos", clear_on_submit=True):
+with tab_cadastro:
+    st.subheader("Génese do Projeto de Lei")
+
+    with st.form("form_central", clear_on_submit=True):
         col1, col2 = st.columns(2)
-        numero_ano = col1.text_input("Número/Ano do Projeto/Lei*", placeholder="Ex: 123/2026")
+        st.markdown("#### Identificação do Projeto")
+        numero_ano = col1.text_input("Número/Ano*", placeholder="Ex: 123/2026")
         tipo_projeto = col2.selectbox("Tipo de Projeto",
                                       ["Projeto de Lei Ordinária", "Projeto de Emenda", "Resolução", "Decreto"])
-
         protocolo = col1.text_input("Protocolo*")
-        status_atual = col2.selectbox("Status Atual", ["Em Tramitação", "Aprovado", "Rejeitado", "Arquivado"])
+        status_atual = col2.selectbox("Status", ["Aguardando Leitura", "Em Tramitação", "Aprovado", "Arquivado"])
 
-        if st.form_submit_button("Gravar Projeto", use_container_width=True):
-            try:
-                # IMPORTANTE: As chaves deste dicionário devem ter o mesmo nome das colunas lá no Supabase
-                payload = {
-                    "numero_projeto": numero_ano,
-                    "tipo_projeto": tipo_projeto,
-                    "protocolo": protocolo,
-                    "status_projeto": status_atual
-                }
-                db.insert_projeto(supabase, payload)
-                st.toast("Projeto gravado com sucesso!", icon="✅")
-            except Exception as e:
-                st.error(f"Erro no banco de dados: {str(e)}")
+        st.markdown("#### Autoria (Propositor)")
+        col3, col4 = st.columns([2, 1])
+        autor_nome = col3.text_input("Nome do Autor/Órgão*")
+        autor_tipo = col4.selectbox("Tipo de Autor", ["Vereador", "Mesa Diretora", "Prefeitura", "Comissão"])
 
-# ---------------------------------------------------------
-# ABA 2: AUTORES (Tabela: autor)
-# ---------------------------------------------------------
-with tab_autores:
-    st.subheader("Novo Autor/Parlamentar")
-    with st.form("form_autores", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        nome_autor = col1.text_input("Nome Completo do Autor*")
-        nome_parlamentar = col2.text_input("Nome Parlamentar", help="Como é conhecido publicamente")
-        tipo_autor = st.selectbox("Tipo de Autor", ["Vereador", "Comissão", "Mesa Diretora", "Prefeitura"])
-
-        if st.form_submit_button("Gravar Autor", use_container_width=True):
-            try:
-                payload = {
-                    "nome_autor": nome_autor,
-                    "nome_parlamentar": nome_parlamentar,
-                    "tipo_autor": tipo_autor
-                }
-                db.insert_autor(supabase, payload)
-                st.toast("Autor cadastrado com sucesso!", icon="✅")
-            except Exception as e:
-                st.error(f"Erro no banco de dados: {str(e)}")
+        if st.form_submit_button("Gravar Registo Central", type="primary", use_container_width=True):
+            if not numero_ano or not autor_nome:
+                st.error("Preencha o Número do Projeto e o Nome do Autor.")
+            else:
+                try:
+                    payload = {
+                        "numero_projeto": numero_ano,
+                        "tipo_projeto": tipo_projeto,
+                        "protocolo": protocolo,
+                        "status_atual": status_atual,
+                        "autor_nome": autor_nome,
+                        "autor_tipo": autor_tipo
+                    }
+                    db.insert_projeto_central(supabase, payload)
+                    st.toast("Projeto e Autor consolidados com sucesso!", icon="✅")
+                except Exception as e:
+                    st.error(f"Falha de I/O: {str(e)}")
 
 # ---------------------------------------------------------
-# ABA 3: TRAMITAÇÕES (Tabela: tramitacao)
+# ABA 2: TRAMITAÇÃO (Update na Super Tabela)
 # ---------------------------------------------------------
 with tab_tramitacao:
-    st.subheader("Registar Movimentação de Setor")
+    st.subheader("Movimentação e Relatoria")
 
-    # Agora procuramos apenas os projetos
-    projetos_disponiveis = db.fetch_projetos(supabase)
+    projetos_disp = db.fetch_projetos(supabase)
 
-    if not projetos_disponiveis:
-        st.warning("É necessário cadastrar pelo menos um Projeto de Lei antes de registar tramitações.")
+    if not projetos_disp:
+        st.warning("Cadastre um projeto na aba anterior para gerir a sua localização.")
     else:
-        with st.form("form_tramitacoes", clear_on_submit=True):
-
+        with st.form("form_tramitacao", clear_on_submit=True):
             projeto_selecionado = st.selectbox(
-                "Selecione o Projeto de Lei*",
-                options=projetos_disponiveis,
-                format_func=lambda x: f"Projeto {x.get('numero_projeto', x.get('numero', 'Desconhecido'))}"
+                "Selecione o Projeto*",
+                options=projetos_disp,
+                format_func=lambda x: f"{x.get('numero_projeto')} - Autoria: {x.get('autor_nome')}"
             )
 
             col1, col2 = st.columns(2)
-            # Substituição dos dropdowns relacionais por campos de texto livre
-            origem_texto = col1.text_input("Setor de Origem*", placeholder="Ex: Gabinete 01")
-            destino_texto = col2.text_input("Setor de Destino*", placeholder="Ex: Plenário")
+            novo_setor = col1.text_input("Novo Setor Atual*", placeholder="Ex: Plenário Principal")
+            novo_relator = col2.text_input("Nome do Relator Designado", placeholder="Deixe em branco se não houver")
 
-            data_envio = st.date_input("Data de Envio")
-
-            if st.form_submit_button("Registar Movimentação", type="primary", use_container_width=True):
-                # Validação simples para garantir que os campos não são enviados em branco
-                if not origem_texto or not destino_texto:
-                    st.error("Por favor, preencha a origem e o destino da tramitação.")
+            if st.form_submit_button("Atualizar Estado", type="primary", use_container_width=True):
+                if not novo_setor:
+                    st.error("O preenchimento do novo setor é obrigatório.")
                 else:
                     try:
-                        id_projeto = projeto_selecionado.get("SK_projeto", projeto_selecionado.get("id"))
-
+                        id_proj = projeto_selecionado.get("id")
                         payload = {
-                            "SK_projeto": id_projeto,
-                            "origem": origem_texto,  # 👈 Envia o texto escrito pelo utilizador
-                            "destino": destino_texto,  # 👈 Envia o texto escrito pelo utilizador
-                            "data_envio": data_envio.isoformat(),
-                            "quantidade_tramitacoes": 1
+                            "setor_atual": novo_setor,
+                            "relator_atual_nome": novo_relator if novo_relator else None
                         }
-                        db.insert_tramitacao(supabase, payload)
-                        st.toast("Tramitação registada com sucesso!", icon="🔄")
+                        db.update_projeto_localizacao(supabase, id_proj, payload)
+                        st.toast("Localização e relatoria atualizadas!", icon="🔄")
                     except Exception as e:
-                        st.error(f"Erro de Integração: {str(e)}")
+                        st.error(f"Falha de I/O: {str(e)}")
+
+# ---------------------------------------------------------
+# ABA 3: PARECER (Insert em Tabela Satélite 1:N)
+# ---------------------------------------------------------
+with tab_parecer:
+    st.subheader("Anexar Parecer de Comissão")
+    st.info("Esta operação preserva o histórico. Um projeto pode receber múltiplos pareceres ao longo do tempo.")
+
+    if projetos_disp:
+        with st.form("form_parecer", clear_on_submit=True):
+            projeto_parecer = st.selectbox(
+                "Vincular ao Projeto*",
+                options=projetos_disp,
+                format_func=lambda x: f"{x.get('numero_projeto')}"
+            )
+
+            col1, col2 = st.columns(2)
+            comissao = col1.text_input("Comissão Emissora*", placeholder="Ex: CCJR")
+            tipo_par = col2.selectbox("Desfecho do Parecer*", ["Favorável", "Contrário", "Com Ressalvas"])
+            data_par = st.date_input("Data do Documento")
+
+            if st.form_submit_button("Registar Parecer Histórico", type="primary", use_container_width=True):
+                if not comissao:
+                    st.error("Informe a comissão que emitiu o parecer.")
+                else:
+                    try:
+                        payload = {
+                            "id_projeto": projeto_parecer.get("id"),  # Chave Estrangeira
+                            "comissao_emissora": comissao,
+                            "tipo_parecer": tipo_par,
+                            "data_parecer": data_par.isoformat()
+                        }
+                        db.insert_parecer(supabase, payload)
+                        st.toast("Parecer acoplado à linha do tempo do projeto!", icon="📑")
+                    except Exception as e:
+                        st.error(f"Falha de I/O: {str(e)}")
