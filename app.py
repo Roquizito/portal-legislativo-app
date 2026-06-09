@@ -5,7 +5,7 @@ import database as db
 st.set_page_config(page_title="Portal de Gestão Legislativa", page_icon="🏛️", layout="wide")
 supabase = db.get_connection()
 
-st.title("🏛️ Portal de Gestão Legislativa")
+st.title("🏛️ Portal de Gestão Legislativa da Câmara Municipal Mossoró/RN")
 st.markdown("---")
 
 tab_cadastro, tab_tramitacao, tab_parecer = st.tabs([
